@@ -1,19 +1,18 @@
-version: '3.8'
-
 services:
-  sync:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: md_to_drive_sync
-    volumes:
-      - ./docs:/app/docs:ro              # Mount docs directory
-      - ./README.md:/app/README.md:ro    # Mount README
-      - ./credentials.json:/app/credentials.json:ro  # Mount credentials
-      - sync_cache:/app/cache            # Named volume for cache (Docker-managed)
+  drive-sync:
+    build: .
     env_file:
       - .env
-    working_dir: /app
+    volumes:
+      # Mount your documentation (read-only)
+      - ./docs:/app/docs:ro
+      - ./README.md:/app/README.md:ro
+
+      # Mount credentials (read-only)
+      - ./credentials.json:/app/credentials.json:ro
+
+      # Persistent cache
+      - sync_cache:/app/cache
 
 volumes:
-  sync_cache:  # Named volume - persists across runs, works on all platforms
+  sync_cache:

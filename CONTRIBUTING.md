@@ -1,131 +1,68 @@
-# Contributing to MD-to-Drive
+# Contributing to Drive Sync
 
-First off, thanks for taking the time to contribute! 🎉
+Thanks for your interest in contributing!
 
-## How Can I Contribute?
+## Reporting Bugs
 
-### Reporting Bugs
+Before creating bug reports, please check existing issues. When creating a bug report, include:
 
-Before creating bug reports, please check the issue list as you might find out that you don't need to create one. When you are creating a bug report, please include as many details as possible:
+- Clear and descriptive title
+- Steps to reproduce the problem
+- Expected vs actual behavior
+- Error messages and stack traces
+- Python version and OS
 
-* **Use a clear and descriptive title**
-* **Describe the exact steps to reproduce the problem**
-* **Provide specific examples** (include code samples, file examples)
-* **Describe the behavior you observed** and what you expected to see
-* **Include error messages** and stack traces
-* **Specify Python version** and OS
+## Suggesting Enhancements
 
-### Suggesting Enhancements
+Enhancement suggestions are tracked as GitHub issues. Please include:
 
-Enhancement suggestions are tracked as GitHub issues. When creating an enhancement suggestion, please include:
+- Clear and descriptive title
+- Step-by-step description of the enhancement
+- Why this enhancement would be useful
 
-* **Use a clear and descriptive title**
-* **Provide a step-by-step description** of the suggested enhancement
-* **Provide specific examples** to demonstrate the steps
-* **Explain why this enhancement would be useful**
+## Pull Requests
 
-### Pull Requests
-
-* Fill in the required template
-* Follow the Python style guide (PEP 8)
-* Include tests for new features
-* Update documentation as needed
-* End all files with a newline
+- Follow PEP 8 style guide
+- Include tests for new features
+- Update documentation as needed
 
 ## Development Setup
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/md-to-drive.git
-cd md-to-drive
+git clone https://github.com/projectassistant-webdev/drive-sync.git
+cd drive-sync
 
 # Create virtual environment
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install in development mode
-pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Format code
-black src/
-
-# Lint code
-flake8 src/
+# Install dependencies
+pip install -r requirements.txt
 ```
 
 ## Project Structure
 
 ```
-md-to-drive/
-├── src/md_to_drive/      # Main package
-│   ├── __init__.py       # Package initialization
+drive-sync/
+├── src/drive_sync/       # Main package
 │   ├── auth.py           # Google authentication
-│   ├── cli.py            # Command-line interface
-│   ├── converter.py      # File conversion logic
-│   └── sync.py           # Sync logic
-├── tests/                # Tests
-├── examples/             # Example configurations
-└── docs/                 # Documentation
+│   ├── cache.py          # Smart caching system
+│   ├── converter.py      # Markdown/CSV conversion
+│   ├── gdocs.py          # Google Docs API
+│   ├── gdrive.py         # Google Drive API
+│   ├── mermaid_api.py    # Mermaid diagram rendering
+│   └── sync.py           # Core sync logic
+├── sync_to_google.py     # Entry point
+└── examples/             # Example configurations
 ```
-
-## Coding Standards
-
-* Follow PEP 8
-* Use type hints where possible
-* Write docstrings for all public functions
-* Keep functions focused and small
-* Add tests for new features
-
-## Testing
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=md_to_drive
-
-# Run specific test
-pytest tests/test_sync.py::test_markdown_to_doc
-```
-
-## Documentation
-
-* Update README.md if adding new features
-* Add docstrings to new functions
-* Update examples/ if changing behavior
 
 ## Commit Messages
 
-* Use present tense ("Add feature" not "Added feature")
-* Use imperative mood ("Move cursor to..." not "Moves cursor to...")
-* Limit first line to 72 characters
-* Reference issues and pull requests
-
-Example:
-```
-Add bidirectional sync feature
-
-- Implement Google Docs to Markdown export
-- Add conflict resolution
-- Update documentation
-
-Fixes #123
-```
-
-## Release Process
-
-1. Update version in `setup.py` and `src/md_to_drive/__init__.py`
-2. Update CHANGELOG.md
-3. Create git tag: `git tag v0.2.0`
-4. Push: `git push origin v0.2.0`
-5. GitHub Actions will automatically publish to PyPI
+- Use present tense ("Add feature" not "Added feature")
+- Use imperative mood ("Move cursor to..." not "Moves cursor to...")
+- Limit first line to 72 characters
 
 ## Questions?
 
-Feel free to open an issue with the `question` label!
-
-Thank you for contributing! 🙏
+Feel free to open an issue with the `question` label.

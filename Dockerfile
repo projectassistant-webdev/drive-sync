@@ -6,8 +6,12 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy sync script
+# Copy application code
+COPY src/ ./src/
 COPY sync_to_google.py .
 
-# Default command
+# Make script executable
+RUN chmod +x sync_to_google.py
+
+# Run sync script
 CMD ["python", "sync_to_google.py"]

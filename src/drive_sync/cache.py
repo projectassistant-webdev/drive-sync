@@ -1,5 +1,5 @@
 """
-Caching system for MD-to-Drive sync
+Caching system for Drive Sync
 Tracks file hashes to avoid re-syncing unchanged files
 """
 

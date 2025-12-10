@@ -44,8 +44,9 @@ class GoogleAuthenticator:
                 "2. Create a project and enable Google Drive API\n"
                 "3. Create a service account\n"
                 "4. Download JSON key as 'credentials.json'\n"
-                "5. Place it in your project directory\n\n"
-                "See: https://github.com/YOUR_USERNAME/md-to-drive#setup-guide"
+                "5. Place it in tools/drive-sync/\n"
+                "6. Share Google Drive folder with service account email\n\n"
+                "See: tools/drive-sync/README.md for detailed setup"
             )
 
         try:

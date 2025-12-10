@@ -1,6 +1,6 @@
 # Examples
 
-This directory contains example configuration files and integration examples for MD-to-Drive.
+This directory contains example configuration files and integration examples for Drive Sync.
 
 ## Configuration Examples
 
@@ -47,11 +47,8 @@ Remember to add `GOOGLE_DRIVE_CREDENTIALS` as a GitHub secret!
 
 ## Docker Example
 
-Run sync in Docker container:
+Run sync with Docker Compose:
 
 ```bash
-docker run -v $(pwd):/workspace \
-  -v $(pwd)/credentials.json:/app/credentials.json:ro \
-  -e GOOGLE_DRIVE_FOLDER_ID=your-folder-id \
-  md-to-drive sync /workspace/docs
+docker compose up
 ```
