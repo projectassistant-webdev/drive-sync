@@ -6,6 +6,7 @@ Automatically sync your Markdown and CSV files to Google Drive with beautiful, a
 
 - **Mermaid Diagram Rendering** - `mermaid` code blocks automatically rendered as PNG images and embedded in Google Docs
 - **Local Image Embedding** - Images referenced in markdown (`![alt](path/to/image.png)`) are uploaded and embedded
+- **Anchor Link Conversion** - Markdown anchor links (`[Section](#section-name)`) become clickable links to headings in Google Docs
 - **Hybrid Embedding Strategy** - Smart URL-based or Drive-hosted embedding based on diagram complexity
 - **Zero Dependencies** - Uses mermaid.ink API (no Node.js, no Puppeteer, no CLI tools needed)
 - **Smart Caching** - Only syncs files that have changed (MD5 hash-based)
@@ -134,6 +135,16 @@ Reference images in your markdown:
 ```
 
 Images are automatically uploaded to Google Drive and embedded in the document.
+
+### Anchor Links
+
+Markdown anchor links are converted to clickable internal links:
+
+```markdown
+See the [Timeline](#timeline) section for details.
+```
+
+The link will navigate to the "Timeline" heading in the Google Doc.
 
 ## Troubleshooting
 
