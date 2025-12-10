@@ -259,6 +259,17 @@ class GoogleDriveSync:
                 logger.info(f"🖼️  Processing {len(images)} local images...")
                 self._process_local_images(doc_id, images, folder_id)
 
+            # Process anchor links if enabled
+            enable_anchor_links = os.getenv('ENABLE_ANCHOR_LINKS', 'true').lower() == 'true'
+            if enable_anchor_links and self.gdocs_service:
+                try:
+                    converted_count = self.gdocs_service.process_anchor_links(doc_id)
+                    if converted_count > 0:
+                        logger.info(f"🔗 Converted {converted_count} anchor links")
+                except Exception as e:
+                    # Don't fail entire sync if anchor conversion fails
+                    logger.warning(f"⚠️  Failed to convert anchor links: {e}")
+
             # Update cache
             if self.use_cache:
                 self.cache.update(md_file, doc_id)
