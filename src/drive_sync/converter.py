@@ -321,6 +321,32 @@ class CSVConverter:
         return 'application/vnd.google-apps.spreadsheet'
 
 
+class PDFConverter:
+    """Handle PDF files - upload directly to Google Drive (no conversion)"""
+
+    @staticmethod
+    def prepare_for_upload(pdf_file: Path) -> dict:
+        """
+        Prepare PDF file for upload (no conversion needed)
+
+        Args:
+            pdf_file: Path to PDF file
+
+        Returns:
+            Dictionary with file metadata
+        """
+        return {
+            'name': pdf_file.name,  # Keep full filename including .pdf
+            'mimeType': 'application/pdf',
+            'description': f'Uploaded from {pdf_file.name}'
+        }
+
+    @staticmethod
+    def get_conversion_mimetype() -> str:
+        """PDFs are not converted - they stay as PDFs in Drive"""
+        return 'application/pdf'
+
+
 class FileTypeDetector:
     """Detect file types and choose appropriate converter"""
 
@@ -328,6 +354,7 @@ class FileTypeDetector:
         '.md': MarkdownConverter,
         '.markdown': MarkdownConverter,
         '.csv': CSVConverter,
+        '.pdf': PDFConverter,
     }
 
     @classmethod

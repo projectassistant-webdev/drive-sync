@@ -19,9 +19,9 @@ from googleapiclient.http import MediaFileUpload
 from googleapiclient.errors import HttpError
 
 from .auth import GoogleAuthenticator
-from .converter import FileTypeDetector, MarkdownConverter, CSVConverter
+from .converter import FileTypeDetector, MarkdownConverter, CSVConverter, PDFConverter
 from .cache import SyncCache
-from .mermaid_api import render_mermaid_diagram, get_mermaid_url, MermaidAPIError
+from .mermaid_api import render_mermaid_diagram, get_mermaid_url, MermaidAPIError, MermaidCLIError
 from .gdocs import GoogleDocsService
 from .gdrive import GoogleDriveService
 
@@ -288,15 +288,21 @@ class GoogleDriveSync:
 
     def _process_mermaid_diagrams(self, doc_id: str, diagrams: List[Dict], folder_id: str):
         """
-        Process Mermaid diagrams: use direct URL or upload to Drive for large diagrams.
+        Process Mermaid diagrams: render and embed in document.
+
+        Rendering strategy based on MERMAID_RENDER_MODE:
+        - "local": Always render locally, upload to Drive, embed via Drive URL (most reliable)
+        - "api": Use direct mermaid.ink URL when possible (original behavior, less reliable)
+        - "hybrid": Try local first, fall back to API
 
         Args:
             doc_id: Google Doc ID
             diagrams: List of diagram dicts with 'name', 'code', 'hash'
-            folder_id: Folder ID for storing large diagram images
+            folder_id: Folder ID for storing diagram images
         """
         # Create subfolder for diagram images (only if needed)
         diagrams_folder_id = None
+        render_mode = os.environ.get('MERMAID_RENDER_MODE', 'local').lower()
 
         for diagram in diagrams:
             try:
@@ -305,27 +311,35 @@ class GoogleDriveSync:
 
                 logger.info(f"  Processing {diagram_name}...")
 
-                # Step 1: Get Mermaid.ink URL and check if it's too long
-                mermaid_url = get_mermaid_url(
-                    diagram_code,
-                    format='png',
-                    theme='default',
-                    background_color='white'
-                )
+                # Determine if we should use local rendering (upload to Drive)
+                # Local mode: ALWAYS render locally and upload to Drive (most reliable)
+                # API mode: Use direct URL when under 2KB limit
+                use_drive_upload = (render_mode == 'local')
 
-                # Google Docs has a 2KB URL limit for images
-                if len(mermaid_url) <= 2000:
-                    logger.info(f"  Using direct Mermaid.ink URL ({len(mermaid_url)} bytes)")
-                    image_url = mermaid_url
-                else:
-                    # URL too long - download and upload to Drive instead
-                    logger.info(f"  URL too long ({len(mermaid_url)} bytes) - uploading to Drive")
+                if not use_drive_upload:
+                    # Check if URL would be too long for Google Docs (2KB limit)
+                    mermaid_url = get_mermaid_url(
+                        diagram_code,
+                        format='png',
+                        theme='default',
+                        background_color='white'
+                    )
+                    if len(mermaid_url) > 2000:
+                        use_drive_upload = True
+                        logger.info(f"  URL too long ({len(mermaid_url)} bytes) - using Drive upload")
+                    else:
+                        logger.info(f"  Using direct Mermaid.ink URL ({len(mermaid_url)} bytes)")
+                        image_url = mermaid_url
+
+                if use_drive_upload:
+                    # Render locally and upload to Google Drive
+                    logger.info(f"  Rendering locally and uploading to Drive...")
 
                     # Create diagrams folder if needed
                     if not diagrams_folder_id:
                         diagrams_folder_id = self.get_or_create_folder("Diagram Images", folder_id)
 
-                    # Download from Mermaid.ink
+                    # Render using configured backend (local CLI or API)
                     png_bytes = render_mermaid_diagram(diagram_code, format='png')
 
                     # Upload to Drive
@@ -336,16 +350,19 @@ class GoogleDriveSync:
                         mime_type='image/png'
                     )
 
-                    # Give service account read access (works on Shared Drives)
+                    # Make the file publicly readable so Google Docs can embed it
                     try:
-                        self.gdrive_service.add_service_account_reader(file_metadata['id'])
-                        logger.info(f"  Added service account read permission")
+                        self.gdrive_service.set_public_permissions(file_metadata['id'])
+                        logger.info(f"  Set public read permissions")
                     except Exception as e:
-                        logger.info(f"  Permission already inherited: {e}")
+                        logger.warning(f"  Could not set public permissions: {e}")
 
-                    # Use Drive download URL
-                    image_url = f"https://drive.google.com/uc?export=download&id={file_metadata['id']}"
-                    logger.info(f"  Using Drive URL ({len(image_url)} bytes)")
+                    # Small delay to let Google Drive process the file
+                    time.sleep(0.5)
+
+                    # Use Drive view URL (works better for embedding)
+                    image_url = f"https://drive.google.com/uc?export=view&id={file_metadata['id']}"
+                    logger.info(f"  Uploaded to Drive ({len(png_bytes)} bytes)")
 
                 # Step 2: Find marker in document and embed image
                 markers = self.gdocs_service.find_diagram_markers(doc_id)
@@ -367,7 +384,7 @@ class GoogleDriveSync:
                 else:
                     logger.warning(f"  ⚠️  Marker not found for {diagram_name}")
 
-            except MermaidAPIError as e:
+            except (MermaidAPIError, MermaidCLIError) as e:
                 logger.error(f"  ❌ Failed to render {diagram_name}: {e}")
             except Exception as e:
                 logger.error(f"  ❌ Failed to process {diagram_name}: {e}")
@@ -570,6 +587,88 @@ class GoogleDriveSync:
         except HttpError as error:
             raise Exception(f"Error syncing {csv_file}: {error}")
 
+    def pdf_to_drive(self, pdf_file: Path, folder_id: Optional[str] = None, custom_name: Optional[str] = None) -> str:
+        """
+        Upload PDF file directly to Google Drive (no conversion).
+
+        Args:
+            pdf_file: Path to PDF file
+            folder_id: Target Google Drive folder ID
+            custom_name: Optional custom name for the file
+
+        Returns:
+            Google Drive file ID
+        """
+        pdf_file = Path(pdf_file)
+        folder_id = folder_id or self.folder_id or 'root'
+
+        converter = PDFConverter()
+        file_metadata = converter.prepare_for_upload(pdf_file)
+
+        if custom_name:
+            file_metadata['name'] = custom_name
+
+        file_name = file_metadata['name']
+
+        # Check cache
+        if self.use_cache:
+            should_sync, reason = self.cache.should_sync(pdf_file)
+            if not should_sync:
+                logger.info(f"⏭️  Skipped: {pdf_file} ({reason})")
+                return self.cache.cache[str(pdf_file)].get('drive_id')
+            logger.info(f"📤 Syncing: {pdf_file} ({reason})")
+        else:
+            logger.info(f"📤 Syncing: {pdf_file}")
+
+        try:
+            # Check if PDF already exists in folder
+            query = f"name='{file_name}' and mimeType='application/pdf' and '{folder_id}' in parents and trashed=false"
+            request = self.service.files().list(
+                q=query,
+                spaces='drive',
+                fields='files(id, name, webViewLink)',
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True
+            )
+            results = self._execute_with_retry(request)
+
+            files = results.get('files', [])
+            media = MediaFileUpload(str(pdf_file), mimetype='application/pdf', resumable=True)
+
+            if files:
+                # Update existing PDF
+                request = self.service.files().update(
+                    fileId=files[0]['id'],
+                    media_body=media,
+                    fields='id,webViewLink',
+                    supportsAllDrives=True
+                )
+                pdf = self._execute_with_retry(request)
+                logger.info(f"🔄 Updated: {pdf_file} → Google Drive PDF")
+                logger.info(f"   View at: {pdf.get('webViewLink')}")
+            else:
+                # Create new PDF
+                file_metadata['parents'] = [folder_id]
+
+                request = self.service.files().create(
+                    body=file_metadata,
+                    media_body=media,
+                    fields='id,webViewLink',
+                    supportsAllDrives=True
+                )
+                pdf = self._execute_with_retry(request)
+                logger.info(f"✅ Created: {pdf_file} → Google Drive PDF")
+                logger.info(f"   View at: {pdf.get('webViewLink')}")
+
+            # Update cache
+            if self.use_cache:
+                self.cache.update(pdf_file, pdf['id'])
+
+            return pdf['id']
+
+        except HttpError as error:
+            raise Exception(f"Error syncing {pdf_file}: {error}")
+
     def sync_file(self, file_path: Path, folder_id: Optional[str] = None) -> str:
         """Auto-detect file type and sync to Google Drive"""
         file_path = Path(file_path)
@@ -581,6 +680,8 @@ class GoogleDriveSync:
                 return self.markdown_to_doc_with_diagrams(file_path, folder_id)
             elif converter_class == CSVConverter:
                 return self.csv_to_sheet(file_path, folder_id)
+            elif converter_class == PDFConverter:
+                return self.pdf_to_drive(file_path, folder_id)
 
         except ValueError as e:
             logger.warning(f"⚠️  Skipped: {file_path} - {e}")

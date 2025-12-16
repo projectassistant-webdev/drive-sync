@@ -2,6 +2,19 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install Node.js, npm, and Chromium for mermaid-cli
+RUN apt-get update && apt-get install -y \
+    nodejs \
+    npm \
+    chromium \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install mermaid-cli globally
+RUN npm install -g @mermaid-js/mermaid-cli
+
+# Set Puppeteer executable path for Docker environment
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
 # Copy requirements and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
