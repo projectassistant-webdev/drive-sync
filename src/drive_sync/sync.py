@@ -55,7 +55,8 @@ class GoogleDriveSync:
         self.service = self.auth.authenticate()
         self.folder_id = folder_id or os.getenv('GOOGLE_DRIVE_FOLDER_ID')
         self.use_cache = use_cache
-        self.cache = SyncCache() if use_cache else None
+        # Pass folder_id to cache for project-specific cache files
+        self.cache = SyncCache(folder_id=self.folder_id) if use_cache else None
         self.rate_limit_delay = rate_limit_delay
         self.batch_size = batch_size
         self.api_call_count = 0

@@ -14,14 +14,26 @@ from typing import Dict, Tuple, Optional
 class SyncCache:
     """Manages sync cache for tracking file changes"""
 
-    def __init__(self, cache_file: str = 'cache/.sync_cache.json'):
+    def __init__(self, cache_file: str = None, folder_id: str = None):
         """
         Initialize sync cache
 
         Args:
-            cache_file: Path to cache file
+            cache_file: Path to cache file (optional - derived from folder_id if not provided)
+            folder_id: Google Drive folder ID (used to create project-specific cache)
         """
-        self.cache_file = cache_file
+        if cache_file:
+            self.cache_file = cache_file
+        elif folder_id:
+            # Create project-specific cache file based on folder ID
+            # Use first 12 chars of folder_id for readability
+            safe_id = folder_id[:12] if len(folder_id) > 12 else folder_id
+            self.cache_file = f'cache/.sync_cache_{safe_id}.json'
+        else:
+            # Fallback to default (legacy behavior)
+            self.cache_file = 'cache/.sync_cache.json'
+
+        self.folder_id = folder_id
         self.cache: Dict[str, dict] = {}
 
     def load(self) -> Dict[str, dict]:
