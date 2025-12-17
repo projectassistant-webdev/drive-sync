@@ -43,9 +43,15 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install test dependencies
+RUN pip install --no-cache-dir pytest pytest-cov
+
 # Copy application code
 COPY src/ ./src/
 COPY sync_to_google.py .
+
+# Copy tests
+COPY tests/ ./tests/
 
 # Create temp directory for mermaid rendering
 RUN mkdir -p /tmp/mermaid
