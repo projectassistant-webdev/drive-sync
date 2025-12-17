@@ -11,8 +11,5 @@ services:
       # Mount credentials (read-only)
       - ./credentials.json:/app/credentials.json:ro
 
-      # Persistent cache
-      - sync_cache:/app/cache
-
-volumes:
-  sync_cache:
+      # Mount cache (local directory - survives docker compose down -v)
+      - ./cache:/app/cache
