@@ -698,12 +698,25 @@ class GoogleDriveSync:
         folders = self.create_folder_structure(directory, self.folder_id)
 
         # Get files to sync
-        pattern = '**/*' if recursive else '*'
-        files = [f for f in directory.glob(pattern) if f.is_file()]
+        glob_pattern = '**/*' if recursive else '*'
+        files = [f for f in directory.glob(glob_pattern) if f.is_file()]
 
         # Filter excluded patterns
         for pattern in exclude:
             files = [f for f in files if not f.match(pattern)]
+
+        # Filter out ignored files (like .gitkeep, .mp4, etc.)
+        ignored_count = 0
+        filtered_files = []
+        for f in files:
+            if FileTypeDetector.should_ignore(f):
+                ignored_count += 1
+            else:
+                filtered_files.append(f)
+        files = filtered_files
+
+        if ignored_count > 0:
+            logger.info(f"⏭️  Skipping {ignored_count} ignored file(s) (.gitkeep, media files, etc.)")
 
         total_files = len(files)
         logger.info(f"\n📊 Found {total_files} files to process\n")

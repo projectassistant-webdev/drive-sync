@@ -1,9 +1,7 @@
 """
 Drive Sync - Enhanced with Mermaid diagram rendering.
 
-Supports multiple rendering backends:
-- Local mermaid-cli (mmdc) - preferred for reliability
-- mermaid.ink API - fallback when CLI unavailable
+Supports both local mermaid-cli and mermaid.ink API backends.
 """
 
 __version__ = "2.0.0"

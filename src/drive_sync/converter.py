@@ -357,6 +357,35 @@ class FileTypeDetector:
         '.pdf': PDFConverter,
     }
 
+    # Files to silently ignore (not count as errors)
+    IGNORED_FILES = {
+        '.gitkeep',
+        '.gitignore',
+        '.DS_Store',
+        'Thumbs.db',
+    }
+
+    # Extensions to silently ignore
+    IGNORED_EXTENSIONS = {
+        '.mp4', '.mov', '.avi', '.mkv', '.wmv',  # Video
+        '.mp3', '.wav', '.flac', '.aac',          # Audio
+        '.zip', '.tar', '.gz', '.rar', '.7z',     # Archives
+        '.exe', '.dll', '.so', '.dylib',          # Binaries
+        '.pyc', '.pyo', '.class',                 # Compiled
+    }
+
+    @classmethod
+    def should_ignore(cls, file_path: Path) -> bool:
+        """Check if file should be silently ignored"""
+        filename = file_path.name.lower()
+        extension = file_path.suffix.lower()
+
+        if filename in cls.IGNORED_FILES or file_path.name in cls.IGNORED_FILES:
+            return True
+        if extension in cls.IGNORED_EXTENSIONS:
+            return True
+        return False
+
     @classmethod
     def get_converter(cls, file_path: Path):
         """
