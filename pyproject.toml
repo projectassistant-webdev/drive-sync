@@ -18,6 +18,7 @@ ignore = ["E501", "E402"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = ["-q", "--tb=short"]
 
 [tool.coverage.run]
