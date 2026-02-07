@@ -4,11 +4,12 @@ Automatically sync your Markdown and CSV files to Google Drive with beautiful, a
 
 ## Features
 
-- **Mermaid Diagram Rendering** - `mermaid` code blocks automatically rendered as PNG images and embedded in Google Docs
+- **Mermaid Diagram Rendering** - `mermaid` code blocks automatically rendered as high-resolution PNG images (3x scale) and embedded in Google Docs
+- **ASCII Wireframe Rendering** - Code blocks with box-drawing characters (`┌─│└`) are automatically rendered as PNG images with monospace fonts
 - **Local Image Embedding** - Images referenced in markdown (`![alt](path/to/image.png)`) are uploaded and embedded
 - **Anchor Link Conversion** - Markdown anchor links (`[Section](#section-name)`) become clickable links to headings in Google Docs
+- **High-Resolution Output** - Mermaid diagrams rendered at 3x scale for crisp text even when zoomed
 - **Hybrid Embedding Strategy** - Smart URL-based or Drive-hosted embedding based on diagram complexity
-- **Zero Dependencies** - Uses mermaid.ink API (no Node.js, no Puppeteer, no CLI tools needed)
 - **Smart Caching** - Only syncs files that have changed (MD5 hash-based)
 - **CSV to Google Sheets** - Automatically converts CSV files
 
@@ -42,11 +43,12 @@ Your markdown files will be synced to Google Drive with Mermaid diagrams rendere
 
 ## How It Works
 
-1. **Markdown Processing** - Scans markdown for `mermaid` blocks and local image references
-2. **Marker Replacement** - Replaces diagrams/images with markers (`[DIAGRAM:id]`, `[IMAGE:id]`)
+1. **Markdown Processing** - Scans markdown for `mermaid` blocks, ASCII wireframes, and local image references
+2. **Marker Replacement** - Replaces content with markers (`[DIAGRAM:id]`, `[ASCII:id]`, `[IMAGE:id]`)
 3. **Upload to Google Drive** - Markdown converted to Google Doc with markers intact
-4. **Diagram Rendering** - Each diagram rendered via mermaid.ink API (returns PNG)
-5. **Image Embedding** - Markers replaced with inline images at exact positions
+4. **Diagram Rendering** - Mermaid diagrams rendered at 3x scale via mermaid-cli for high-resolution output
+5. **ASCII Rendering** - Wireframes rendered as PNG using Pillow with monospace fonts
+6. **Image Embedding** - Markers replaced with inline images at exact positions
 
 ### Hybrid Embedding Strategy
 
@@ -125,6 +127,34 @@ All Mermaid diagram types are supported:
 - State diagrams
 - Pie charts
 - Gantt charts
+
+### ASCII Wireframes
+
+Code blocks containing box-drawing characters are automatically detected and rendered as PNG images:
+
+```markdown
+```
+┌─────────────────────────────────────┐
+│  ≡  My Application    [Settings]   │
+├─────────────────────────────────────┤
+│                                     │
+│  ┌─────────────────────────────┐   │
+│  │  📄 Save This Item          │   │
+│  └─────────────────────────────┘   │
+│                                     │
+└─────────────────────────────────────┘
+```
+```
+
+**Detection criteria:**
+- Contains box-drawing characters: `┌┐└┘─│├┤┬┴┼═║╔╗╚╝╠╣╦╩╬`
+- Excludes code blocks with programming keywords (`def`, `function`, `class`, etc.)
+
+The wireframes are rendered with:
+- DejaVu Sans Mono font (monospace)
+- Light gray background (`#f6f8fa`)
+- Subtle border styling
+- Proper character alignment
 
 ### Local Images
 

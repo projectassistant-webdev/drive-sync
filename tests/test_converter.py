@@ -5,15 +5,11 @@ Tests Markdown processing, Mermaid extraction, image extraction,
 and file type detection.
 """
 
-import pytest
-import tempfile
 from pathlib import Path
-from src.drive_sync.converter import (
-    MarkdownConverter,
-    CSVConverter,
-    PDFConverter,
-    FileTypeDetector
-)
+
+import pytest
+
+from src.drive_sync.converter import CSVConverter, FileTypeDetector, MarkdownConverter, PDFConverter
 
 
 class TestMermaidExtraction:
@@ -176,7 +172,7 @@ class TestImageExtraction:
 
         # Create markdown file
         md_file = tmp_path / "doc.md"
-        md_content = f"![Alt text](test.png)"
+        md_content = "![Alt text](test.png)"
 
         modified, images = MarkdownConverter.extract_local_images(md_content, md_file)
 
@@ -350,7 +346,7 @@ graph TD
         assert len(result['diagrams']) == 1
 
         # Verify temp file content
-        with open(result['temp_file'], 'r') as f:
+        with open(result['temp_file']) as f:
             content = f.read()
             assert '⟨ inline code ⟩' in content
             assert '[DIAGRAM:' in content

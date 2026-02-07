@@ -4,9 +4,8 @@ Tests for sync cache functionality.
 Tests file hashing, cache storage, and sync decision logic.
 """
 
-import pytest
 import json
-from pathlib import Path
+
 from src.drive_sync.cache import SyncCache
 
 

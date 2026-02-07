@@ -48,4 +48,4 @@ jobs:
 # Setup:
 # 1. Add GOOGLE_CREDENTIALS secret (contents of credentials.json)
 # 2. Add GOOGLE_DRIVE_FOLDER_ID secret (your folder ID)
-# Settings → Secrets and variables → Actions → New repository secret
+# Settings > Secrets and variables > Actions > New repository secret

@@ -4,18 +4,20 @@ File conversion utilities for Markdown, CSV, and Mermaid diagrams.
 Enhanced with Mermaid diagram extraction, image embedding, and marker replacement.
 """
 
+from __future__ import annotations
+
+import hashlib
 import re
 import tempfile
-import hashlib
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple
+from typing import Any, ClassVar
 
 
 class MarkdownConverter:
     """Convert Markdown files to Google Docs format with Mermaid and image support"""
 
     @staticmethod
-    def extract_mermaid_diagrams(md_content: str) -> Tuple[str, List[Dict[str, str]]]:
+    def extract_mermaid_diagrams(md_content: str) -> tuple[str, list[dict[str, str]]]:
         """
         Extract Mermaid diagrams from markdown and replace with markers.
 
@@ -72,7 +74,179 @@ class MarkdownConverter:
         return modified_content, diagrams
 
     @staticmethod
-    def extract_local_images(md_content: str, source_file: Path) -> Tuple[str, List[Dict[str, str]]]:
+    def extract_ascii_codeblocks(md_content: str) -> tuple[str, list[dict[str, str]]]:
+        """
+        Extract ASCII code blocks (non-mermaid) from markdown and replace with markers.
+
+        ASCII wireframes and code blocks use box-drawing characters that require
+        monospace fonts to display correctly. Google Docs doesn't preserve monospace
+        formatting, so we render these as PNG images.
+
+        Args:
+            md_content: Raw markdown content with ``` code blocks
+
+        Returns:
+            Tuple of (modified_content, codeblocks_list)
+            - modified_content: Markdown with code blocks replaced by markers
+            - codeblocks_list: List of dicts with 'name', 'code', 'hash'
+
+        Example:
+            Input:
+                ```
+                ┌─────────────┐
+                │  Hello      │
+                └─────────────┘
+                ```
+
+            Output:
+                Content: "[ASCII:ascii_abc123]"
+                Codeblocks: [{'name': 'ascii_abc123', 'code': '┌─────...', 'hash': 'abc123'}]
+        """
+        codeblocks = []
+
+        def replace_codeblock(match):
+            lang = match.group(1) or ''  # Language specifier (if any)
+            code_content = match.group(2).strip()
+
+            # Skip if empty or very short
+            if not code_content or len(code_content) < 10:
+                return match.group(0)
+
+            # Skip non-ASCII code blocks (programming languages)
+            # Only render blocks that contain box-drawing chars or look like wireframes
+            box_chars = '┌┐└┘─│├┤┬┴┼═║╔╗╚╝╠╣╦╩╬'
+            has_box_chars = any(c in code_content for c in box_chars)
+
+            # Also check for ASCII art patterns (multiple consecutive special chars)
+            has_ascii_pattern = bool(re.search(r'[│|─\-+]{3,}', code_content))
+
+            # Box-drawing characters are a STRONG signal - if present, it's ASCII art
+            # Don't let keyword detection override box-drawing detection
+            if has_box_chars:
+                # Definitely ASCII art, process it
+                pass
+            elif has_ascii_pattern:
+                # Might be ASCII art, check for code keywords
+                code_keywords = ['def ', 'function ', 'class ', 'import ', 'const ', 'let ', 'var ', 'return ']
+                looks_like_code = any(kw in code_content.lower() for kw in code_keywords)
+                if looks_like_code:
+                    return match.group(0)
+            else:
+                # No ASCII art indicators, skip
+                return match.group(0)
+
+            # Generate unique name for code block
+            code_hash = hashlib.md5(code_content.encode()).hexdigest()[:8]
+            block_name = f"ascii_{code_hash}"
+
+            # Store code block info
+            codeblocks.append({
+                'name': block_name,
+                'code': code_content,
+                'hash': code_hash,
+                'lang': lang
+            })
+
+            # Replace with marker
+            return f"\n[ASCII:{block_name}]\n"
+
+        # Match code blocks: ```lang\ncontent``` or ```\ncontent```
+        # But NOT ```mermaid blocks (those are handled separately)
+        modified_content = re.sub(
+            r'```(?!mermaid)(\w*)\n(.*?)```',
+            replace_codeblock,
+            md_content,
+            flags=re.DOTALL
+        )
+
+        return modified_content, codeblocks
+
+    @staticmethod
+    def extract_syntax_codeblocks(md_content: str) -> tuple[str, list[dict[str, str]]]:
+        """
+        Extract syntax-highlighted code blocks from markdown and replace with markers.
+
+        These are code blocks with a language specifier (e.g., ```javascript, ```python)
+        that should be rendered as PNG images with syntax highlighting.
+
+        Args:
+            md_content: Raw markdown content with ``` code blocks
+
+        Returns:
+            Tuple of (modified_content, codeblocks_list)
+            - modified_content: Markdown with code blocks replaced by markers
+            - codeblocks_list: List of dicts with 'name', 'code', 'hash', 'lang'
+
+        Example:
+            Input:
+                ```javascript
+                const x = 1;
+                console.log(x);
+                ```
+
+            Output:
+                Content: "[CODE:code_abc123]"
+                Codeblocks: [{'name': 'code_abc123', 'code': 'const x...', 'lang': 'javascript'}]
+        """
+        codeblocks = []
+
+        # Known programming languages to render as syntax-highlighted images
+        SYNTAX_LANGUAGES = {
+            'javascript', 'js', 'typescript', 'ts', 'python', 'py', 'java', 'kotlin',
+            'swift', 'go', 'rust', 'ruby', 'rb', 'php', 'c', 'cpp', 'csharp', 'cs',
+            'sql', 'bash', 'sh', 'shell', 'powershell', 'yaml', 'yml', 'json', 'xml',
+            'html', 'css', 'scss', 'sass', 'less', 'graphql', 'dockerfile', 'docker',
+            'terraform', 'hcl', 'nginx', 'apache', 'lua', 'perl', 'r', 'scala',
+            'groovy', 'elixir', 'erlang', 'clojure', 'haskell', 'ocaml', 'fsharp',
+            'dart', 'jsx', 'tsx', 'vue', 'svelte', 'markdown', 'md', 'toml', 'ini',
+            'makefile', 'cmake', 'gradle', 'maven', 'npm', 'pip', 'requirements',
+        }
+
+        def replace_codeblock(match):
+            lang = (match.group(1) or '').lower().strip()
+            code_content = match.group(2).strip()
+
+            # Skip if no language specified or not a known language
+            if not lang or lang not in SYNTAX_LANGUAGES:
+                return match.group(0)
+
+            # Skip if empty or very short
+            if not code_content or len(code_content) < 5:
+                return match.group(0)
+
+            # Skip ASCII art blocks (those have box-drawing chars)
+            box_chars = '┌┐└┘─│├┤┬┴┼═║╔╗╚╝╠╣╦╩╬'
+            if any(c in code_content for c in box_chars):
+                return match.group(0)
+
+            # Generate unique name for code block
+            code_hash = hashlib.md5(code_content.encode()).hexdigest()[:8]
+            block_name = f"code_{code_hash}"
+
+            # Store code block info
+            codeblocks.append({
+                'name': block_name,
+                'code': code_content,
+                'hash': code_hash,
+                'lang': lang
+            })
+
+            # Replace with marker
+            return f"\n[CODE:{block_name}]\n"
+
+        # Match code blocks with language specifier: ```lang\ncontent```
+        # Skip mermaid blocks (handled separately)
+        modified_content = re.sub(
+            r'```(?!mermaid)(\w+)\n(.*?)```',
+            replace_codeblock,
+            md_content,
+            flags=re.DOTALL
+        )
+
+        return modified_content, codeblocks
+
+    @staticmethod
+    def extract_local_images(md_content: str, source_file: Path) -> tuple[str, list[dict[str, str]]]:
         """
         Extract local image references from markdown and replace with markers.
 
@@ -234,8 +408,10 @@ class MarkdownConverter:
         md_file: Path,
         format_code: bool = True,
         extract_diagrams: bool = True,
-        extract_images: bool = True
-    ) -> dict:
+        extract_images: bool = True,
+        extract_ascii: bool = True,
+        extract_code: bool = True
+    ) -> dict[str, Any]:
         """
         Prepare markdown file for upload with optional code formatting, diagram and image extraction.
 
@@ -244,6 +420,8 @@ class MarkdownConverter:
             format_code: Whether to apply code formatting (default: True)
             extract_diagrams: Whether to extract Mermaid diagrams (default: True)
             extract_images: Whether to extract local image references (default: True)
+            extract_ascii: Whether to extract ASCII code blocks as images (default: True)
+            extract_code: Whether to extract syntax-highlighted code blocks as images (default: True)
 
         Returns:
             Dictionary with:
@@ -253,19 +431,31 @@ class MarkdownConverter:
             - temp_file: Path to temporary processed file (if processing was done)
             - diagrams: List of extracted diagrams (if any)
             - images: List of extracted image references (if any)
+            - ascii_blocks: List of extracted ASCII code blocks (if any)
+            - code_blocks: List of extracted syntax code blocks (if any)
         """
         md_file = Path(md_file)
 
         # Read markdown content
-        with open(md_file, 'r', encoding='utf-8') as f:
+        with open(md_file, encoding='utf-8') as f:
             md_content = f.read()
 
         diagrams = []
         images = []
+        ascii_blocks = []
+        code_blocks = []
 
         # Extract Mermaid diagrams first (before code formatting)
         if extract_diagrams:
             md_content, diagrams = MarkdownConverter.extract_mermaid_diagrams(md_content)
+
+        # Extract syntax-highlighted code blocks (before ASCII extraction to avoid conflicts)
+        if extract_code:
+            md_content, code_blocks = MarkdownConverter.extract_syntax_codeblocks(md_content)
+
+        # Extract ASCII code blocks (wireframes, ASCII art) - renders as images
+        if extract_ascii:
+            md_content, ascii_blocks = MarkdownConverter.extract_ascii_codeblocks(md_content)
 
         # Extract local image references (before code formatting converts backticks)
         if extract_images:
@@ -276,17 +466,19 @@ class MarkdownConverter:
             md_content = MarkdownConverter.preprocess_markdown_for_google_docs(md_content)
 
         # Create temporary file with processed content
-        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8')
-        temp_file.write(md_content)
-        temp_file.close()
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as temp_file:
+            temp_file.write(md_content)
+            temp_file_name = temp_file.name
 
         return {
             'name': md_file.stem,
             'mimeType': 'text/markdown',
             'description': f'Converted from {md_file.name}',
-            'temp_file': temp_file.name,
+            'temp_file': temp_file_name,
             'diagrams': diagrams,
-            'images': images
+            'images': images,
+            'ascii_blocks': ascii_blocks,
+            'code_blocks': code_blocks
         }
 
     @staticmethod
@@ -299,15 +491,14 @@ class CSVConverter:
     """Convert CSV files to Google Sheets format"""
 
     @staticmethod
-    def prepare_for_upload(csv_file: Path) -> dict:
-        """
-        Prepare CSV file for upload
+    def prepare_for_upload(csv_file: Path) -> dict[str, str]:
+        """Prepare CSV file for upload.
 
         Args:
-            csv_file: Path to CSV file
+            csv_file: Path to CSV file.
 
         Returns:
-            Dictionary with file metadata
+            Dictionary with file metadata.
         """
         return {
             'name': csv_file.stem,
@@ -325,15 +516,14 @@ class PDFConverter:
     """Handle PDF files - upload directly to Google Drive (no conversion)"""
 
     @staticmethod
-    def prepare_for_upload(pdf_file: Path) -> dict:
-        """
-        Prepare PDF file for upload (no conversion needed)
+    def prepare_for_upload(pdf_file: Path) -> dict[str, str]:
+        """Prepare PDF file for upload (no conversion needed).
 
         Args:
-            pdf_file: Path to PDF file
+            pdf_file: Path to PDF file.
 
         Returns:
-            Dictionary with file metadata
+            Dictionary with file metadata.
         """
         return {
             'name': pdf_file.name,  # Keep full filename including .pdf
@@ -350,7 +540,7 @@ class PDFConverter:
 class FileTypeDetector:
     """Detect file types and choose appropriate converter"""
 
-    CONVERTERS = {
+    CONVERTERS: ClassVar[dict] = {
         '.md': MarkdownConverter,
         '.markdown': MarkdownConverter,
         '.csv': CSVConverter,
@@ -358,7 +548,7 @@ class FileTypeDetector:
     }
 
     # Files to silently ignore (not count as errors)
-    IGNORED_FILES = {
+    IGNORED_FILES: ClassVar[set] = {
         '.gitkeep',
         '.gitignore',
         '.DS_Store',
@@ -366,7 +556,7 @@ class FileTypeDetector:
     }
 
     # Extensions to silently ignore
-    IGNORED_EXTENSIONS = {
+    IGNORED_EXTENSIONS: ClassVar[set] = {
         '.mp4', '.mov', '.avi', '.mkv', '.wmv',  # Video
         '.mp3', '.wav', '.flac', '.aac',          # Audio
         '.zip', '.tar', '.gz', '.rar', '.7z',     # Archives
@@ -376,29 +566,33 @@ class FileTypeDetector:
 
     @classmethod
     def should_ignore(cls, file_path: Path) -> bool:
-        """Check if file should be silently ignored"""
+        """Check if file should be silently ignored.
+
+        Args:
+            file_path: Path to the file to check.
+
+        Returns:
+            True if the file should be silently skipped during sync.
+        """
         filename = file_path.name.lower()
         extension = file_path.suffix.lower()
 
         if filename in cls.IGNORED_FILES or file_path.name in cls.IGNORED_FILES:
             return True
-        if extension in cls.IGNORED_EXTENSIONS:
-            return True
-        return False
+        return extension in cls.IGNORED_EXTENSIONS
 
     @classmethod
-    def get_converter(cls, file_path: Path):
-        """
-        Get appropriate converter for file type
+    def get_converter(cls, file_path: Path) -> type[MarkdownConverter] | type[CSVConverter] | type[PDFConverter]:
+        """Get appropriate converter for file type.
 
         Args:
-            file_path: Path to file
+            file_path: Path to file.
 
         Returns:
-            Converter class or None if unsupported
+            Converter class for the given file type.
 
         Raises:
-            ValueError: If file type is not supported
+            ValueError: If file type is not supported.
         """
         suffix = file_path.suffix.lower()
         converter = cls.CONVERTERS.get(suffix)

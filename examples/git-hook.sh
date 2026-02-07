@@ -12,12 +12,12 @@ CHANGED_DOCS=$(git diff-tree --no-commit-id --name-only -r HEAD | grep -E '\.(md
 
 if [ -n "$CHANGED_DOCS" ]; then
     echo ""
-    echo "📝 Documentation files changed:"
+    echo "Documentation files changed:"
     echo "$CHANGED_DOCS"
     echo ""
 
     # Option 1: Auto-sync without prompt
-    # echo "🔄 Auto-syncing to Google Drive..."
+    # echo "Auto-syncing to Google Drive..."
     # md-to-drive sync docs/ --quiet
 
     # Option 2: Ask before syncing
@@ -25,9 +25,9 @@ if [ -n "$CHANGED_DOCS" ]; then
     echo ""
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "🔄 Syncing to Google Drive..."
+        echo "Syncing to Google Drive..."
         md-to-drive sync docs/
     else
-        echo "⏭️  Skipped sync. Run manually: md-to-drive sync docs/"
+        echo "Skipped sync. Run manually: md-to-drive sync docs/"
     fi
 fi

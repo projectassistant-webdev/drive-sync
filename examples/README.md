@@ -16,7 +16,7 @@ Template for Google Cloud service account credentials.
 Environment variable template for configuration.
 
 **Setup:**
-1. Copy to `.env` in your project root
+1. Copy to `.env.local` in your project root
 2. Update `GOOGLE_DRIVE_FOLDER_ID` with your folder ID
 3. Customize `SYNC_PATHS` and `SYNC_SUBFOLDERS` as needed
 

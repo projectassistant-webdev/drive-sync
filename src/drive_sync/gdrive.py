@@ -7,15 +7,16 @@ Provides:
 - Folder creation
 """
 
-import logging
-from typing import Dict, Any, Optional
-from pathlib import Path
+from __future__ import annotations
 
+import logging
+from pathlib import Path
+from typing import Any
+
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaInMemoryUpload
-from google.oauth2 import service_account
-
 
 logger = logging.getLogger(__name__)
 
@@ -32,23 +33,44 @@ class GoogleDriveError(Exception):
 
 
 class GoogleDriveService:
-    """
-    Google Drive service wrapper for file operations.
+    """Google Drive service wrapper for file operations.
+
+    Supports two initialization modes:
+    - **New (preferred):** Pass a ``GoogleAuthenticator`` instance to share
+      credentials with other services.
+    - **Legacy:** Pass a credentials file path (string). The service will
+      authenticate independently for backward compatibility.
     """
 
-    def __init__(self, credentials_path: str):
-        """
-        Initialize Google Drive service.
+    def __init__(self, credentials_path_or_auth: Any = None, *, credentials_path: str | None = None) -> None:
+        """Initialize Google Drive service.
 
         Args:
-            credentials_path: Path to service account credentials JSON
+            credentials_path_or_auth: Either a ``GoogleAuthenticator`` instance
+                (new style) or a credentials file path string (legacy style).
+            credentials_path: Explicit credentials file path (legacy keyword arg).
+                Used only if ``credentials_path_or_auth`` is not provided.
         """
-        self.credentials_path = credentials_path
-        self.service = None
-        self._authenticate()
+        from .auth import GoogleAuthenticator
 
-    def _authenticate(self):
-        """Authenticate with Google Drive API"""
+        if isinstance(credentials_path_or_auth, GoogleAuthenticator):
+            # New style: share credentials from authenticator
+            self._auth = credentials_path_or_auth
+            self.credentials_path = str(self._auth.credentials_file)
+            self.service = self._auth.drive_service
+            logger.info("GoogleDriveService initialized with shared authenticator")
+        else:
+            # Legacy style: authenticate independently with file path
+            path = credentials_path_or_auth or credentials_path
+            if path is None:
+                raise GoogleDriveError("credentials_path is required")
+            self.credentials_path = path
+            self._auth = None
+            self.service = None
+            self._authenticate()
+
+    def _authenticate(self) -> None:
+        """Authenticate with Google Drive API (legacy path)."""
         try:
             if not Path(self.credentials_path).exists():
                 raise GoogleDriveError(
@@ -64,8 +86,8 @@ class GoogleDriveService:
             logger.info("Authenticated with Google Drive API")
 
         except Exception as e:
-            logger.error(f"Authentication failed: {str(e)}")
-            raise GoogleDriveError(f"Authentication failed: {str(e)}")
+            logger.error(f"Authentication failed: {e!s}")
+            raise GoogleDriveError(f"Authentication failed: {e!s}") from e
 
     def upload_image_bytes(
         self,
@@ -73,8 +95,7 @@ class GoogleDriveService:
         filename: str,
         folder_id: str,
         mime_type: str = 'image/png',
-        shared_drive_id: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Upload image from bytes to Google Drive.
 
@@ -83,7 +104,6 @@ class GoogleDriveService:
             filename: Name for the file in Drive
             folder_id: Folder ID to upload to
             mime_type: MIME type of the image (default: image/png)
-            shared_drive_id: Shared Drive ID if applicable
 
         Returns:
             Dict: File metadata with id, name, and webViewLink
@@ -127,21 +147,19 @@ class GoogleDriveService:
 
         except HttpError as error:
             logger.error(f"Failed to upload image: {error}")
-            raise GoogleDriveError(f"Failed to upload image: {error}")
+            raise GoogleDriveError(f"Failed to upload image: {error}") from error
 
     def create_folder(
         self,
         name: str,
         parent_id: str,
-        shared_drive_id: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Create a folder in Google Drive.
 
         Args:
             name: Folder name
             parent_id: Parent folder ID
-            shared_drive_id: Shared Drive ID if applicable
 
         Returns:
             Dict: Folder metadata with id and name
@@ -173,19 +191,17 @@ class GoogleDriveService:
 
         except HttpError as error:
             logger.error(f"Failed to create folder: {error}")
-            raise GoogleDriveError(f"Failed to create folder: {error}")
+            raise GoogleDriveError(f"Failed to create folder: {error}") from error
 
     def get_public_url(
         self,
         file_id: str,
-        shared_drive_id: Optional[str] = None
     ) -> str:
         """
         Get direct public URL for an image (for embedding).
 
         Args:
             file_id: File ID
-            shared_drive_id: Shared Drive ID if applicable
 
         Returns:
             str: Public URL for direct embedding
@@ -196,14 +212,12 @@ class GoogleDriveService:
     def set_public_permissions(
         self,
         file_id: str,
-        shared_drive_id: Optional[str] = None
     ) -> None:
         """
         Make file publicly readable.
 
         Args:
             file_id: File ID
-            shared_drive_id: Shared Drive ID if applicable
 
         Raises:
             GoogleDriveError: If permission setting fails
@@ -227,7 +241,7 @@ class GoogleDriveService:
 
         except HttpError as error:
             logger.error(f"Failed to set permissions: {error}")
-            raise GoogleDriveError(f"Failed to set permissions: {error}")
+            raise GoogleDriveError(f"Failed to set permissions: {error}") from error
 
     def add_service_account_reader(
         self,
@@ -269,4 +283,4 @@ class GoogleDriveService:
 
         except HttpError as error:
             logger.error(f"Failed to add service account permission: {error}")
-            raise GoogleDriveError(f"Failed to add service account permission: {error}")
+            raise GoogleDriveError(f"Failed to add service account permission: {error}") from error

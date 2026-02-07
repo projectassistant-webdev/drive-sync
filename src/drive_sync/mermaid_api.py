@@ -1,5 +1,7 @@
 """
-Mermaid diagram rendering with multiple backends:
+Mermaid diagram rendering with multiple backends.
+
+Supported backends:
 1. Local mermaid-cli (mmdc) - preferred, reliable, no external dependencies
 2. mermaid.ink API - fallback when CLI unavailable
 
@@ -9,19 +11,27 @@ The render mode is controlled by MERMAID_RENDER_MODE environment variable:
 - "hybrid": Try local first, fall back to API on failure
 """
 
+from __future__ import annotations
+
 import base64
 import logging
 import os
+import shutil
 import subprocess
 import tempfile
-import shutil
 from pathlib import Path
+
 import httpx
 
 logger = logging.getLogger(__name__)
 
 # Check if mermaid-cli is available
 MMDC_AVAILABLE = shutil.which('mmdc') is not None
+
+# Named constants for default configuration values
+MERMAID_DEFAULT_TIMEOUT = 60
+MERMAID_API_TIMEOUT = 30
+MERMAID_DEFAULT_SCALE = 3
 
 
 class MermaidAPIError(Exception):
@@ -39,7 +49,8 @@ def render_mermaid_local(
     format: str = "png",
     theme: str = "default",
     background_color: str = "white",
-    timeout: int = 60
+    timeout: int = MERMAID_DEFAULT_TIMEOUT,
+    scale: int = MERMAID_DEFAULT_SCALE
 ) -> bytes:
     """
     Render Mermaid diagram using local mermaid-cli (mmdc).
@@ -56,6 +67,7 @@ def render_mermaid_local(
         theme: Mermaid theme (default, dark, forest, neutral)
         background_color: Background color
         timeout: Render timeout in seconds
+        scale: Scale factor for output resolution (default: 3 for crisp text when zoomed)
 
     Returns:
         bytes: Rendered diagram image
@@ -87,6 +99,7 @@ def render_mermaid_local(
             '-o', str(output_file),
             '-t', theme,
             '-b', background_color,
+            '-s', str(scale),  # Scale factor for higher resolution (3x = crisp when zoomed)
             '--quiet'  # Suppress progress output
         ]
 
@@ -125,8 +138,8 @@ def render_mermaid_local(
 
         return image_bytes
 
-    except subprocess.TimeoutExpired:
-        raise MermaidCLIError(f"Mermaid CLI timed out after {timeout}s")
+    except subprocess.TimeoutExpired as exc:
+        raise MermaidCLIError(f"Mermaid CLI timed out after {timeout}s") from exc
     except Exception as e:
         if isinstance(e, MermaidCLIError):
             raise
@@ -137,8 +150,8 @@ def render_mermaid_local(
             if f and f.exists():
                 try:
                     f.unlink()
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to clean up temp file {f}: {e}")
 
 
 def render_mermaid_api(
@@ -146,7 +159,7 @@ def render_mermaid_api(
     format: str = "png",
     theme: str = "default",
     background_color: str = "white",
-    timeout: int = 30
+    timeout: int = MERMAID_API_TIMEOUT
 ) -> bytes:
     """
     Render Mermaid diagram using mermaid.ink API.
@@ -193,12 +206,12 @@ def render_mermaid_api(
             return image_bytes
 
     except httpx.HTTPError as e:
-        error_msg = f"Mermaid.ink API request failed: {str(e)}"
+        error_msg = f"Mermaid.ink API request failed: {e!s}"
         logger.error(error_msg)
         raise MermaidAPIError(error_msg) from e
 
     except Exception as e:
-        error_msg = f"Failed to render Mermaid diagram: {str(e)}"
+        error_msg = f"Failed to render Mermaid diagram: {e!s}"
         logger.error(error_msg)
         raise MermaidAPIError(error_msg) from e
 
@@ -208,7 +221,7 @@ def render_mermaid_diagram(
     format: str = "png",
     theme: str = "default",
     background_color: str = "white",
-    timeout: int = 60
+    timeout: int = MERMAID_DEFAULT_TIMEOUT
 ) -> bytes:
     """
     Main entry point for rendering Mermaid diagrams.
@@ -244,7 +257,7 @@ def render_mermaid_diagram(
     if render_mode == 'api':
         # Use API only
         logger.info("Using mermaid.ink API (MERMAID_RENDER_MODE=api)")
-        return render_mermaid_api(diagram_code, format, theme, background_color, min(timeout, 30))
+        return render_mermaid_api(diagram_code, format, theme, background_color, min(timeout, MERMAID_API_TIMEOUT))
 
     elif render_mode == 'local':
         # Use local CLI only
@@ -265,10 +278,10 @@ def render_mermaid_diagram(
                 return render_mermaid_local(diagram_code, format, theme, background_color, timeout)
             except MermaidCLIError as e:
                 logger.warning(f"Local rendering failed, falling back to API: {e}")
-                return render_mermaid_api(diagram_code, format, theme, background_color, min(timeout, 30))
+                return render_mermaid_api(diagram_code, format, theme, background_color, min(timeout, MERMAID_API_TIMEOUT))
         else:
             logger.info("mermaid-cli not available, using API")
-            return render_mermaid_api(diagram_code, format, theme, background_color, min(timeout, 30))
+            return render_mermaid_api(diagram_code, format, theme, background_color, min(timeout, MERMAID_API_TIMEOUT))
 
     else:
         # Unknown mode, default to local if available, otherwise API
@@ -276,7 +289,7 @@ def render_mermaid_diagram(
         if MMDC_AVAILABLE:
             return render_mermaid_local(diagram_code, format, theme, background_color, timeout)
         else:
-            return render_mermaid_api(diagram_code, format, theme, background_color, min(timeout, 30))
+            return render_mermaid_api(diagram_code, format, theme, background_color, min(timeout, MERMAID_API_TIMEOUT))
 
 
 def get_mermaid_url(
@@ -328,45 +341,3 @@ def validate_mermaid_syntax(diagram_code: str) -> tuple[bool, str | None]:
         return True, None
     except (MermaidAPIError, MermaidCLIError) as e:
         return False, str(e)
-
-
-# Convenience functions for common diagram types
-
-def render_architecture_diagram(diagram_code: str) -> bytes:
-    """Render architecture diagram with default theme."""
-    return render_mermaid_diagram(
-        diagram_code,
-        format="png",
-        theme="default",
-        background_color="white"
-    )
-
-
-def render_flowchart(diagram_code: str) -> bytes:
-    """Render flowchart diagram."""
-    return render_mermaid_diagram(
-        diagram_code,
-        format="png",
-        theme="default",
-        background_color="white"
-    )
-
-
-def render_sequence_diagram(diagram_code: str) -> bytes:
-    """Render sequence diagram."""
-    return render_mermaid_diagram(
-        diagram_code,
-        format="png",
-        theme="default",
-        background_color="white"
-    )
-
-
-def render_erd_diagram(diagram_code: str) -> bytes:
-    """Render entity relationship diagram (ERD)."""
-    return render_mermaid_diagram(
-        diagram_code,
-        format="png",
-        theme="default",
-        background_color="white"
-    )

@@ -8,17 +8,18 @@ Provides:
 - Professional styling
 """
 
+from __future__ import annotations
+
 import logging
 import re
-from typing import Dict, Any, List, Optional
 from pathlib import Path
+from typing import Any
 
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from google.oauth2 import service_account
 
-from .utils import slugify_heading, get_unique_slug
-
+from .utils import get_unique_slug, slugify_heading
 
 logger = logging.getLogger(__name__)
 
@@ -36,24 +37,46 @@ class GoogleDocsError(Exception):
 
 
 class GoogleDocsService:
-    """
-    Google Docs service wrapper with diagram embedding support.
+    """Google Docs service wrapper with diagram embedding support.
+
+    Supports two initialization modes:
+    - **New (preferred):** Pass a ``GoogleAuthenticator`` instance to share
+      credentials with other services.
+    - **Legacy:** Pass a credentials file path (string). The service will
+      authenticate independently for backward compatibility.
     """
 
-    def __init__(self, credentials_path: str):
-        """
-        Initialize Google Docs service.
+    def __init__(self, credentials_path_or_auth: Any = None, *, credentials_path: str | None = None) -> None:
+        """Initialize Google Docs service.
 
         Args:
-            credentials_path: Path to service account credentials JSON
+            credentials_path_or_auth: Either a ``GoogleAuthenticator`` instance
+                (new style) or a credentials file path string (legacy style).
+            credentials_path: Explicit credentials file path (legacy keyword arg).
+                Used only if ``credentials_path_or_auth`` is not provided.
         """
-        self.credentials_path = credentials_path
-        self.docs_service = None
-        self.drive_service = None
-        self._authenticate()
+        from .auth import GoogleAuthenticator
 
-    def _authenticate(self):
-        """Authenticate with Google Docs and Drive APIs"""
+        if isinstance(credentials_path_or_auth, GoogleAuthenticator):
+            # New style: share credentials from authenticator
+            self._auth = credentials_path_or_auth
+            self.credentials_path = str(self._auth.credentials_file)
+            self.docs_service = self._auth.docs_service
+            self.drive_service = self._auth.drive_service
+            logger.info("GoogleDocsService initialized with shared authenticator")
+        else:
+            # Legacy style: authenticate independently with file path
+            path = credentials_path_or_auth or credentials_path
+            if path is None:
+                raise GoogleDocsError("credentials_path is required")
+            self.credentials_path = path
+            self._auth = None
+            self.docs_service = None
+            self.drive_service = None
+            self._authenticate()
+
+    def _authenticate(self) -> None:
+        """Authenticate with Google Docs and Drive APIs (legacy path)."""
         try:
             if not Path(self.credentials_path).exists():
                 raise GoogleDocsError(
@@ -70,10 +93,10 @@ class GoogleDocsService:
             logger.info("Authenticated with Google Docs API")
 
         except Exception as e:
-            logger.error(f"Authentication failed: {str(e)}")
-            raise GoogleDocsError(f"Authentication failed: {str(e)}")
+            logger.error(f"Authentication failed: {e!s}")
+            raise GoogleDocsError(f"Authentication failed: {e!s}") from e
 
-    def find_diagram_markers(self, doc_id: str) -> List[Dict[str, Any]]:
+    def find_diagram_markers(self, doc_id: str) -> list[dict[str, Any]]:
         """
         Find diagram markers in document ([DIAGRAM:name]).
 
@@ -178,10 +201,10 @@ class GoogleDocsService:
 
         except HttpError as error:
             logger.error(f"Failed to embed diagram: {error}")
-            raise GoogleDocsError(f"Failed to embed diagram: {error}")
+            raise GoogleDocsError(f"Failed to embed diagram: {error}") from error
 
     @staticmethod
-    def _parse_headings(document: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    def _parse_headings(document: dict[str, Any]) -> dict[str, dict[str, Any]]:
         """
         Parse headings from Google Docs document structure.
 
@@ -270,7 +293,7 @@ class GoogleDocsService:
         return heading_map
 
     @staticmethod
-    def _find_anchor_links(document: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _find_anchor_links(document: dict[str, Any]) -> list[dict[str, Any]]:
         """
         Find all internal anchor links in document.
 
@@ -332,8 +355,8 @@ class GoogleDocsService:
     def convert_anchor_links(
         self,
         doc_id: str,
-        heading_map: Dict[str, Dict[str, Any]],
-        anchor_links: List[Dict[str, Any]]
+        heading_map: dict[str, dict[str, Any]],
+        anchor_links: list[dict[str, Any]]
     ) -> int:
         """
         Convert anchor links to headingId links.
@@ -404,7 +427,7 @@ class GoogleDocsService:
 
         except HttpError as error:
             logger.error(f"Failed to convert anchor links: {error}")
-            raise GoogleDocsError(f"Failed to convert anchor links: {error}")
+            raise GoogleDocsError(f"Failed to convert anchor links: {error}") from error
 
     def process_anchor_links(self, doc_id: str) -> int:
         """
@@ -445,4 +468,4 @@ class GoogleDocsService:
 
         except HttpError as error:
             logger.error(f"Failed to process anchor links: {error}")
-            raise GoogleDocsError(f"Failed to process anchor links: {error}")
+            raise GoogleDocsError(f"Failed to process anchor links: {error}") from error

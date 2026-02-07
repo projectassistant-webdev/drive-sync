@@ -3,6 +3,7 @@ credentials.json
 
 # Environment
 .env
+.env.local
 
 # Cache
 cache/
@@ -16,6 +17,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.ruff_cache/
 
 # IDE
 .vscode/

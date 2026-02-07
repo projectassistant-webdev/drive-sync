@@ -1,20 +1,29 @@
 """
-Caching system for Drive Sync
-Tracks file hashes to avoid re-syncing unchanged files
+Caching system for Drive Sync.
+
+Tracks file hashes to avoid re-syncing unchanged files.
 """
 
-import os
-import json
+from __future__ import annotations
+
 import hashlib
-from pathlib import Path
+import json
+import logging
+import os
 from datetime import datetime
-from typing import Dict, Tuple, Optional
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class SyncCache:
-    """Manages sync cache for tracking file changes"""
+    """Manages sync cache for tracking file changes.
 
-    def __init__(self, cache_file: str = None, folder_id: str = None):
+    Tracks MD5 hashes of local files and their corresponding Google Drive
+    file IDs to avoid re-syncing unchanged files.
+    """
+
+    def __init__(self, cache_file: str | None = None, folder_id: str | None = None):
         """
         Initialize sync cache
 
@@ -34,9 +43,9 @@ class SyncCache:
             self.cache_file = 'cache/.sync_cache.json'
 
         self.folder_id = folder_id
-        self.cache: Dict[str, dict] = {}
+        self.cache: dict[str, dict] = {}
 
-    def load(self) -> Dict[str, dict]:
+    def load(self) -> dict[str, dict]:
         """
         Load cache from disk
 
@@ -45,37 +54,37 @@ class SyncCache:
         """
         if os.path.exists(self.cache_file):
             try:
-                with open(self.cache_file, 'r') as f:
+                with open(self.cache_file) as f:
                     self.cache = json.load(f)
-                    print(f"📂 Loaded cache with {len(self.cache)} entries")
+                    logger.info(f"Loaded cache with {len(self.cache)} entries")
             except Exception as e:
-                print(f"⚠️  Error loading cache: {e}")
+                logger.warning(f"Error loading cache: {e}")
                 self.cache = {}
         else:
             self.cache = {}
-            print(f"📂 No existing cache found - starting fresh")
+            logger.info("No existing cache found - starting fresh")
 
         return self.cache
 
-    def save(self):
-        """Save cache to disk"""
+    def save(self) -> None:
+        """Save cache to disk."""
         try:
             # Ensure cache directory exists
             cache_dir = os.path.dirname(self.cache_file)
             if cache_dir and not os.path.exists(cache_dir):
-                print(f"📁 Creating cache directory: {cache_dir}")
+                logger.info(f"Creating cache directory: {cache_dir}")
                 os.makedirs(cache_dir, exist_ok=True)
 
-            print(f"📝 Saving cache to: {self.cache_file}")
+            logger.debug(f"Saving cache to: {self.cache_file}")
             with open(self.cache_file, 'w') as f:
                 json.dump(self.cache, f, indent=2)
 
-            print(f"✅ Cache saved successfully ({len(self.cache)} entries)")
+            logger.info(f"Cache saved successfully ({len(self.cache)} entries)")
         except Exception as e:
-            print(f"❌ Error saving cache: {e}")
+            logger.error(f"Error saving cache: {e}")
 
     @staticmethod
-    def get_file_hash(file_path: Path) -> Optional[str]:
+    def get_file_hash(file_path: Path) -> str | None:
         """
         Get MD5 hash of file content
 
@@ -92,10 +101,10 @@ class SyncCache:
                     hash_md5.update(chunk)
             return hash_md5.hexdigest()
         except Exception as e:
-            print(f"⚠️  Error hashing {file_path}: {e}")
+            logger.warning(f"Error hashing {file_path}: {e}")
             return None
 
-    def should_sync(self, file_path: Path) -> Tuple[bool, str]:
+    def should_sync(self, file_path: Path) -> tuple[bool, str]:
         """
         Check if file should be synced based on cache
 
@@ -124,13 +133,12 @@ class SyncCache:
         # Already synced and unchanged
         return False, "already synced"
 
-    def update(self, file_path: Path, drive_file_id: str):
-        """
-        Update cache with synced file info
+    def update(self, file_path: Path, drive_file_id: str) -> None:
+        """Update cache with synced file info.
 
         Args:
-            file_path: Local file path
-            drive_file_id: Google Drive file ID
+            file_path: Local file path.
+            drive_file_id: Google Drive file ID.
         """
         file_hash = self.get_file_hash(file_path)
         if file_hash:
@@ -140,7 +148,7 @@ class SyncCache:
                 'last_sync': datetime.now().isoformat(),
             }
 
-    def get_stats(self) -> Dict[str, int]:
+    def get_stats(self) -> dict[str, int]:
         """
         Get cache statistics
 
