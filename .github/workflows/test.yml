@@ -7,11 +7,30 @@ on:
     branches: [main]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+          pip install -e .
+
+      - name: Lint with ruff
+        run: ruff check src/ tests/
+
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.11', '3.12', '3.13']
 
     steps:
       - uses: actions/checkout@v4
@@ -24,10 +43,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install flake8
+          pip install -r requirements.txt -r requirements-dev.txt
+          pip install -e .
 
-      - name: Lint with flake8
-        run: |
-          flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 src/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      - name: Run tests
+        run: pytest tests/ --cov=src/drive_sync --cov-report=term-missing --cov-fail-under=80

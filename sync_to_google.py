@@ -5,9 +5,12 @@ Drive Sync - Entry point script.
 Enhanced with zero-dependency Mermaid diagram rendering via mermaid.ink API.
 """
 
+from __future__ import annotations
+
+import glob
+import logging
 import os
 import sys
-import logging
 from pathlib import Path
 
 # Add src to Python path
@@ -16,16 +19,16 @@ sys.path.insert(0, str(Path(__file__).parent / 'src'))
 from drive_sync.sync import GoogleDriveSync
 
 
-def setup_logging():
-    """Configure logging output"""
+def setup_logging() -> None:
+    """Configure logging output."""
     logging.basicConfig(
         level=logging.INFO,
         format='%(message)s'
     )
 
 
-def main():
-    """Main sync workflow"""
+def main() -> None:
+    """Main sync workflow."""
     setup_logging()
     logger = logging.getLogger(__name__)
 
@@ -61,22 +64,34 @@ def main():
             enable_mermaid=enable_mermaid
         )
 
-        # Sync each configured path
+        # Sync each configured path (supports glob patterns like /workspace/projects/*/scope)
         for path_str in sync_paths:
-            path = Path(path_str.strip())
+            path_str = path_str.strip()
 
-            if not path.exists():
-                logger.warning(f"⚠️  Path not found: {path}")
-                continue
+            # Expand glob patterns
+            if '*' in path_str:
+                expanded_paths = sorted(glob.glob(path_str))
+                if not expanded_paths:
+                    logger.warning(f"⚠️  No matches for pattern: {path_str}")
+                    continue
+            else:
+                expanded_paths = [path_str]
 
-            logger.info(f"🔄 Syncing: {path}")
+            for expanded in expanded_paths:
+                path = Path(expanded)
 
-            if path.is_file():
-                # Sync single file
-                sync.sync_file(path, folder_id)
-            elif path.is_dir():
-                # Sync directory
-                sync.sync_directory(path, recursive=True)
+                if not path.exists():
+                    logger.warning(f"⚠️  Path not found: {path}")
+                    continue
+
+                logger.info(f"🔄 Syncing: {path}")
+
+                if path.is_file():
+                    # Sync single file
+                    sync.sync_file(path, folder_id)
+                elif path.is_dir():
+                    # Sync directory
+                    sync.sync_directory(path, recursive=True)
 
         # Finalize
         sync.finalize()

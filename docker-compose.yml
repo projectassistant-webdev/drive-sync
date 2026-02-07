@@ -4,11 +4,9 @@ services:
     env_file:
       - .env
     volumes:
-      # === PROJECT VOLUMES START ===
-      # Add your project-specific volumes here (preserved during rollout)
+      # Project files to sync
       - ./docs:/app/docs:ro
       - ./README.md:/app/README.md:ro
-      # === PROJECT VOLUMES END ===
 
       # Mount credentials (read-only)
       - ./credentials.json:/app/credentials.json:ro

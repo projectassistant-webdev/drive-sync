@@ -1,7 +1,7 @@
 # drive-sync Makefile
 # Usage: make [target]
 
-.PHONY: help test test-verbose test-coverage test-local build run
+.PHONY: help test test-verbose test-coverage build run
 
 # Default target
 help:
@@ -11,7 +11,6 @@ help:
 	@echo "  make test              Run tests in Docker"
 	@echo "  make test-verbose      Run tests with verbose output"
 	@echo "  make test-coverage     Run tests with coverage report"
-	@echo "  make test-local        Run tests locally (no Docker)"
 	@echo ""
 	@echo "Docker:"
 	@echo "  make build             Build Docker image"
@@ -21,17 +20,13 @@ help:
 
 test:
 	@echo "Running tests in Docker..."
-	docker run --rm drive-sync-drive-sync python -m pytest tests/ -v
+	docker compose run --rm drive-sync python -m pytest tests/ -v
 
 test-verbose:
-	docker run --rm drive-sync-drive-sync python -m pytest tests/ -v --tb=long
+	docker compose run --rm drive-sync python -m pytest tests/ -v --tb=long
 
 test-coverage:
-	docker run --rm drive-sync-drive-sync python -m pytest tests/ -v --cov=src/drive_sync --cov-report=term-missing
-
-test-local:
-	@echo "Running tests locally (requires Python dependencies)..."
-	python -m pytest tests/ -v
+	docker compose run --rm drive-sync python -m pytest tests/ -v --cov=src/drive_sync --cov-report=term-missing
 
 # ===== Docker =====
 

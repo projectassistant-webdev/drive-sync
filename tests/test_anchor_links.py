@@ -7,8 +7,7 @@ Tests the complete workflow:
 3. Detect and convert anchor links in documents
 """
 
-import pytest
-from src.drive_sync.utils import slugify_heading, get_unique_slug
+from src.drive_sync.utils import get_unique_slug, slugify_heading
 
 
 class TestSlugifyHeading:
@@ -352,8 +351,9 @@ class TestAnchorLinkConversion:
 
     def test_convert_anchor_links(self):
         """Test conversion of anchor links to headingId links."""
+        from unittest.mock import MagicMock, Mock
+
         from src.drive_sync.gdocs import GoogleDocsService
-        from unittest.mock import Mock, MagicMock
 
         # Mock Google Docs service
         mock_docs_service = Mock()
@@ -408,8 +408,9 @@ class TestAnchorLinkConversion:
 
     def test_convert_multiple_links_reverse_order(self):
         """Test that multiple links are processed in reverse index order."""
+        from unittest.mock import MagicMock, Mock
+
         from src.drive_sync.gdocs import GoogleDocsService
-        from unittest.mock import Mock, MagicMock
 
         mock_docs_service = Mock()
         mock_batch_update = MagicMock()
@@ -446,9 +447,10 @@ class TestAnchorLinkConversion:
 
     def test_missing_heading_warning(self, caplog):
         """Test that missing headings are warned but don't fail conversion."""
-        from src.drive_sync.gdocs import GoogleDocsService
-        from unittest.mock import Mock, MagicMock
         import logging
+        from unittest.mock import MagicMock, Mock
+
+        from src.drive_sync.gdocs import GoogleDocsService
 
         mock_docs_service = Mock()
         mock_batch_update = MagicMock()
@@ -488,8 +490,9 @@ class TestIntegration:
 
     def test_process_anchor_links_complete_workflow(self):
         """Test complete workflow: get doc, parse headings, find links, convert."""
+        from unittest.mock import MagicMock, Mock
+
         from src.drive_sync.gdocs import GoogleDocsService
-        from unittest.mock import Mock, MagicMock
 
         # Mock Google Docs service
         mock_docs_service = Mock()

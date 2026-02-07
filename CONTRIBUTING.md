@@ -22,8 +22,9 @@ Enhancement suggestions are tracked as GitHub issues. Please include:
 
 ## Pull Requests
 
-- Follow PEP 8 style guide
+- Follow existing code style (enforced by ruff)
 - Include tests for new features
+- Ensure `pytest tests/` passes with 80%+ coverage
 - Update documentation as needed
 
 ## Development Setup
@@ -33,35 +34,50 @@ Enhancement suggestions are tracked as GitHub issues. Please include:
 git clone https://github.com/projectassistant-webdev/drive-sync.git
 cd drive-sync
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Option 1: Docker (recommended)
+docker compose build
+docker compose run --rm drive-sync pytest tests/ -v
 
-# Install dependencies
-pip install -r requirements.txt
+# Option 2: Local
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
+pytest tests/ -v
 ```
 
 ## Project Structure
 
 ```
 drive-sync/
-├── src/drive_sync/       # Main package
-│   ├── auth.py           # Google authentication
-│   ├── cache.py          # Smart caching system
-│   ├── converter.py      # Markdown/CSV conversion
-│   ├── gdocs.py          # Google Docs API
-│   ├── gdrive.py         # Google Drive API
-│   ├── mermaid_api.py    # Mermaid diagram rendering
-│   └── sync.py           # Core sync logic
-├── sync_to_google.py     # Entry point
-└── examples/             # Example configurations
+├── src/drive_sync/
+│   ├── sync/              # Core sync logic (orchestrator, processors, uploaders)
+│   ├── auth.py            # Google authentication
+│   ├── cache.py           # Smart caching system
+│   ├── converter.py       # Markdown/CSV conversion
+│   ├── gdocs.py           # Google Docs API
+│   ├── gdrive.py          # Google Drive API
+│   ├── mermaid_api.py     # Mermaid diagram rendering
+│   ├── ascii_renderer.py  # ASCII wireframe rendering
+│   ├── code_renderer.py   # Code syntax highlighting
+│   └── utils.py           # Shared utilities
+├── tests/                 # Test suite (92% coverage)
+├── examples/              # Example configurations
+├── sync_to_google.py      # Entry point
+└── pyproject.toml         # Project configuration
 ```
 
 ## Commit Messages
 
-- Use present tense ("Add feature" not "Added feature")
-- Use imperative mood ("Move cursor to..." not "Moves cursor to...")
-- Limit first line to 72 characters
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+feat: add new feature
+fix: fix a bug
+docs: documentation changes
+test: adding tests
+chore: maintenance tasks
+refactor: code restructuring
+```
 
 ## Questions?
 

@@ -2,6 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Set Python path for module imports
+ENV PYTHONPATH=/app
+
 # Install system dependencies for Chromium (required by mermaid-cli)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -9,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     chromium \
     fonts-liberation \
+    fonts-dejavu-core \
     libappindicator3-1 \
     libasound2 \
     libatk-bridge2.0-0 \
@@ -28,8 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (LTS version for mermaid-cli)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
+RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
 # Install mermaid-cli globally
@@ -43,8 +46,9 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install test dependencies
-RUN pip install --no-cache-dir pytest pytest-cov
+# Install dev/test dependencies
+COPY requirements-dev.txt .
+RUN pip install --no-cache-dir -r requirements-dev.txt
 
 # Copy application code
 COPY src/ ./src/

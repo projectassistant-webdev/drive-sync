@@ -1,40 +1,110 @@
 """
-Google Drive authentication module
+Google API authentication module.
+
+Provides a single authentication point for all Google API services
+(Drive v3, Docs v1) with lazy initialization. Credentials are created
+once and shared across all service clients.
 """
 
-import os
+from __future__ import annotations
+
+import logging
 from pathlib import Path
+from typing import Any
+
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+logger = logging.getLogger(__name__)
 
+# Combined scopes for all Google API services used by drive-sync
+ALL_SCOPES = [
+    'https://www.googleapis.com/auth/drive',
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/documents',
+]
+
+# Legacy scope kept for backward compatibility
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 
 class GoogleAuthenticator:
-    """Handle Google Drive authentication"""
+    """Handle Google API authentication with lazy service initialization.
 
-    def __init__(self, credentials_file='credentials.json'):
-        """
-        Initialize authenticator
+    Creates credentials once and provides lazy-initialized properties
+    for each API service (Drive v3, Docs v1). This avoids authenticating
+    three times at startup when only some services may be needed.
+
+    Args:
+        credentials_file: Path to service account JSON file.
+        scopes: OAuth scopes to request. Defaults to ALL_SCOPES.
+    """
+
+    def __init__(self, credentials_file: str | Path = 'credentials.json', scopes: list[str] | None = None) -> None:
+        """Initialize authenticator.
 
         Args:
-            credentials_file: Path to service account JSON file
+            credentials_file: Path to service account JSON file.
+            scopes: OAuth scopes to request. Defaults to ALL_SCOPES
+                which covers Drive, Drive.file, and Documents APIs.
         """
         self.credentials_file = Path(credentials_file)
-        self._service = None
+        self.scopes = scopes or ALL_SCOPES
+        self._credentials: Any = None
+        self._drive_service: Any = None
+        self._docs_service: Any = None
+        # Legacy attribute for backward compatibility
+        self._service: Any = None
 
-    def authenticate(self):
-        """
-        Authenticate with Google Drive API
+    @property
+    def credentials(self) -> Any:
+        """Get or create Google API credentials (lazy).
 
         Returns:
-            Google Drive service object
+            google.oauth2.service_account.Credentials: Authenticated credentials.
 
         Raises:
-            FileNotFoundError: If credentials file doesn't exist
-            ValueError: If credentials are invalid
+            FileNotFoundError: If credentials file doesn't exist.
+            ValueError: If credentials are invalid.
+        """
+        if self._credentials is None:
+            self._credentials = self._create_credentials()
+        return self._credentials
+
+    @property
+    def drive_service(self) -> Any:
+        """Get or create Google Drive API v3 service (lazy).
+
+        Returns:
+            googleapiclient.discovery.Resource: Drive API service.
+        """
+        if self._drive_service is None:
+            self._drive_service = build('drive', 'v3', credentials=self.credentials)
+            logger.info("Initialized Google Drive API v3 service")
+        return self._drive_service
+
+    @property
+    def docs_service(self) -> Any:
+        """Get or create Google Docs API v1 service (lazy).
+
+        Returns:
+            googleapiclient.discovery.Resource: Docs API service.
+        """
+        if self._docs_service is None:
+            self._docs_service = build('docs', 'v1', credentials=self.credentials)
+            logger.info("Initialized Google Docs API v1 service")
+        return self._docs_service
+
+    def _create_credentials(self) -> Any:
+        """Create Google API credentials from service account file.
+
+        Returns:
+            google.oauth2.service_account.Credentials: Authenticated credentials.
+
+        Raises:
+            FileNotFoundError: If credentials file doesn't exist.
+            ValueError: If credentials are invalid.
         """
         if not self.credentials_file.exists():
             raise FileNotFoundError(
@@ -52,34 +122,52 @@ class GoogleAuthenticator:
         try:
             creds = service_account.Credentials.from_service_account_file(
                 str(self.credentials_file),
-                scopes=SCOPES
+                scopes=self.scopes
             )
-            self._service = build('drive', 'v3', credentials=creds)
-            return self._service
-
+            logger.info("Created Google API credentials")
+            return creds
         except Exception as e:
-            raise ValueError(f"Invalid credentials file: {e}")
+            raise ValueError(f"Invalid credentials file: {e}") from e
 
-    @property
-    def service(self):
-        """Get or create Google Drive service"""
-        if self._service is None:
-            self._service = self.authenticate()
-        return self._service
+    def authenticate(self) -> Any:
+        """Authenticate and return a Google Drive v3 service.
 
-    def test_connection(self):
-        """
-        Test Google Drive API connection
+        This is a backward-compatible method. New code should use
+        the ``drive_service`` property instead.
 
         Returns:
-            bool: True if connection successful
+            googleapiclient.discovery.Resource: Drive API v3 service.
 
         Raises:
-            HttpError: If connection fails
+            FileNotFoundError: If credentials file doesn't exist.
+            ValueError: If credentials are invalid.
+        """
+        self._service = self.drive_service
+        return self._service
+
+    @property
+    def service(self) -> Any:
+        """Get or create Google Drive service (backward compatibility).
+
+        Returns:
+            googleapiclient.discovery.Resource: Drive API v3 service.
+        """
+        if self._service is None:
+            self._service = self.drive_service
+        return self._service
+
+    def test_connection(self) -> bool:
+        """Test Google Drive API connection.
+
+        Returns:
+            True if connection successful.
+
+        Raises:
+            HttpError: If connection fails.
         """
         try:
             # Try to list files (limit 1) to test connection
-            self.service.files().list(pageSize=1).execute()
+            self.drive_service.files().list(pageSize=1).execute()
             return True
         except HttpError as error:
-            raise HttpError(f"Connection test failed: {error}")
+            raise HttpError(f"Connection test failed: {error}") from error

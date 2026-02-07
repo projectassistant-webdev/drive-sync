@@ -6,9 +6,10 @@ Includes:
 - get_unique_slug: Handle duplicate headings with -1, -2 suffixes
 """
 
+from __future__ import annotations
+
 import re
 import unicodedata
-from typing import Dict
 
 
 def slugify_heading(text: str) -> str:
@@ -63,7 +64,7 @@ def slugify_heading(text: str) -> str:
     return slug
 
 
-def get_unique_slug(base_slug: str, seen_slugs: Dict[str, int]) -> str:
+def get_unique_slug(base_slug: str, seen_slugs: dict[str, int]) -> str:
     """
     Get unique slug for heading, handling duplicates with -1, -2 suffixes.
 
