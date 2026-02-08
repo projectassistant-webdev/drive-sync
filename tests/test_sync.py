@@ -378,6 +378,91 @@ class TestFinalize:
         mock_sync.finalize()  # Should not raise
 
 
+class TestCacheRebuildTrigger:
+    """Test cache rebuild from Drive trigger in sync_directory (Phase 3)."""
+
+    def test_rebuild_triggers_when_cache_is_empty(self, mock_sync, tmp_path):
+        """AC-3.10: Rebuild triggers when cache is_empty() returns True."""
+        (tmp_path / "doc.md").write_text("# Test\n")
+        mock_sync.cache.is_empty.return_value = True
+        mock_sync.gdrive_service.list_files.return_value = [
+            {"id": "d1", "name": "doc.md"},
+        ]
+
+        with (
+            patch.object(mock_sync, "create_folder_structure", return_value={str(tmp_path): "folder-id"}),
+            patch.object(mock_sync, "sync_file", return_value="doc-123"),
+        ):
+            mock_sync.sync_directory(tmp_path)
+
+        # list_files should have been called for rebuild
+        mock_sync.gdrive_service.list_files.assert_called_once_with("test-folder-id")
+        mock_sync.cache.rebuild_from_drive.assert_called_once()
+
+    def test_rebuild_does_not_trigger_when_cache_has_data(self, mock_sync, tmp_path):
+        """AC-3.12a: Rebuild does NOT trigger when cache is not empty."""
+        (tmp_path / "doc.md").write_text("# Test\n")
+        mock_sync.cache.is_empty.return_value = False
+
+        with (
+            patch.object(mock_sync, "create_folder_structure", return_value={str(tmp_path): "folder-id"}),
+            patch.object(mock_sync, "sync_file", return_value="doc-123"),
+        ):
+            mock_sync.sync_directory(tmp_path)
+
+        # list_files should NOT have been called
+        mock_sync.gdrive_service.list_files.assert_not_called()
+
+    def test_rebuild_uses_existing_gdrive_service(self, mock_sync, tmp_path):
+        """AC-3.13: Rebuild uses existing gdrive_service when available."""
+        (tmp_path / "doc.md").write_text("# Test\n")
+        mock_sync.cache.is_empty.return_value = True
+        mock_sync.gdrive_service.list_files.return_value = []
+
+        with (
+            patch.object(mock_sync, "create_folder_structure", return_value={str(tmp_path): "folder-id"}),
+            patch.object(mock_sync, "sync_file", return_value=None),
+        ):
+            mock_sync.sync_directory(tmp_path)
+
+        mock_sync.gdrive_service.list_files.assert_called_once()
+
+    def test_rebuild_creates_temp_drive_service_when_none(self, mock_sync, tmp_path, monkeypatch):
+        """AC-3.14: Creates temporary Drive service from self.auth when gdrive_service is None."""
+        (tmp_path / "doc.md").write_text("# Test\n")
+        mock_sync.cache.is_empty.return_value = True
+        mock_sync.gdrive_service = None  # Simulate mermaid disabled
+
+        mock_temp_drive = MagicMock()
+        mock_temp_drive.list_files.return_value = []
+
+        with (
+            patch("src.drive_sync.sync.orchestrator.GoogleDriveService", return_value=mock_temp_drive) as mock_cls,
+            patch.object(mock_sync, "create_folder_structure", return_value={str(tmp_path): "folder-id"}),
+            patch.object(mock_sync, "sync_file", return_value=None),
+        ):
+            mock_sync.sync_directory(tmp_path)
+
+        # Should have created a temporary GoogleDriveService from auth
+        mock_cls.assert_called_once_with(mock_sync.auth)
+        mock_temp_drive.list_files.assert_called_once()
+
+    def test_rebuild_graceful_degradation_on_error(self, mock_sync, tmp_path):
+        """AC-3.15: Rebuild error is caught; sync continues with empty cache."""
+        (tmp_path / "doc.md").write_text("# Test\n")
+        mock_sync.cache.is_empty.return_value = True
+        mock_sync.gdrive_service.list_files.side_effect = Exception("Network error")
+
+        with (
+            patch.object(mock_sync, "create_folder_structure", return_value={str(tmp_path): "folder-id"}),
+            patch.object(mock_sync, "sync_file", return_value="doc-123"),
+        ):
+            # Should NOT raise — graceful degradation
+            result = mock_sync.sync_directory(tmp_path)
+
+        assert isinstance(result, dict)
+
+
 class TestConstants:
     """Test module-level constants."""
 

@@ -1,6 +1,6 @@
 [project]
 name = "drive-sync"
-version = "2.1.0"
+version = "2.2.0"
 description = "Sync markdown files to Google Drive with Mermaid diagram support"
 requires-python = ">=3.11"
 

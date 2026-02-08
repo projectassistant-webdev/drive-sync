@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.2.0] - 2026-02-08
+
+### Added
+- Atomic cache writes — `save()` writes to temp file then `os.replace()` to prevent corruption
+- Automatic cache backup — `.bak` file created on every save, fallback on corrupt/missing cache
+- Drive rebuild fallback — if cache is totally lost, queries Google Drive to rebuild from existing files
+- `list_files()` method on `GoogleDriveService` for listing folder contents
+- `rebuild_from_drive()` method on `SyncCache` for cache reconstruction
+- `is_empty()` method on `SyncCache` for detecting total cache loss
+- 44 new tests for cache resilience (348 total, 93% coverage)
+
 ## [2.1.0] - 2026-02-08
 
 ### Added
