@@ -271,3 +271,104 @@ class TestGoogleDriveError:
         """Test that error carries a descriptive message."""
         with pytest.raises(GoogleDriveError, match="upload failed"):
             raise GoogleDriveError("upload failed")
+
+
+class TestListFiles:
+    """Test GoogleDriveService.list_files() method (Phase 3)."""
+
+    def _make_service(self):
+        """Helper: create service with mocked Drive API."""
+        mock_auth = _make_mock_auth()
+        service = GoogleDriveService(mock_auth)
+        return service
+
+    def test_list_files_returns_non_folder_files(self):
+        """AC-3.1: list_files() returns only non-folder files from a folder.
+
+        The API query itself filters out folders via mimeType != condition.
+        The mock simulates the API returning only non-folder files (since
+        the real API would filter them server-side).
+        """
+        service = self._make_service()
+
+        # Mock API response — the real API filters folders via the query,
+        # so the response only contains non-folder files.
+        service.service.files().list().execute.return_value = {
+            "files": [
+                {"id": "f1", "name": "doc.md", "mimeType": "text/markdown"},
+                {"id": "f3", "name": "image.png", "mimeType": "image/png"},
+            ]
+        }
+
+        result = service.list_files("folder-123")
+
+        assert len(result) == 2
+        assert {"id": "f1", "name": "doc.md"} in result
+        assert {"id": "f3", "name": "image.png"} in result
+
+        # Verify the API query includes folder exclusion
+        call_kwargs = service.service.files().list.call_args
+        if call_kwargs:
+            query = call_kwargs[1].get("q", "")
+            assert "mimeType != 'application/vnd.google-apps.folder'" in query
+
+    def test_list_files_handles_pagination(self):
+        """AC-3.2: list_files() collects files across multiple pages."""
+        service = self._make_service()
+
+        # First page has a nextPageToken
+        page1 = {
+            "files": [
+                {"id": "f1", "name": "file1.md", "mimeType": "text/markdown"},
+            ],
+            "nextPageToken": "token-page-2",
+        }
+        # Second page has no nextPageToken (last page)
+        page2 = {
+            "files": [
+                {"id": "f2", "name": "file2.md", "mimeType": "text/markdown"},
+            ],
+        }
+
+        # Chain execute calls to return page1 then page2
+        service.service.files().list().execute.side_effect = [page1, page2]
+
+        result = service.list_files("folder-123")
+
+        assert len(result) == 2
+        assert {"id": "f1", "name": "file1.md"} in result
+        assert {"id": "f2", "name": "file2.md"} in result
+
+    def test_list_files_raises_on_api_error(self):
+        """AC-3.3: list_files() raises GoogleDriveError on HttpError."""
+        from googleapiclient.errors import HttpError
+
+        service = self._make_service()
+        service.service.files().list().execute.side_effect = HttpError(
+            resp=MagicMock(status=500), content=b"Server error"
+        )
+
+        with pytest.raises(GoogleDriveError, match="Failed to list files"):
+            service.list_files("folder-123")
+
+    def test_list_files_supports_shared_drives(self):
+        """AC-3.4: list_files() passes supportsAllDrives=True in API call."""
+        service = self._make_service()
+        service.service.files().list().execute.return_value = {"files": []}
+
+        service.list_files("folder-123")
+
+        # Verify files().list() was called with supportsAllDrives=True
+        call_kwargs = service.service.files().list.call_args
+        if call_kwargs:
+            assert call_kwargs[1].get("supportsAllDrives") is True
+            assert call_kwargs[1].get("includeItemsFromAllDrives") is True
+
+    def test_list_files_empty_folder(self):
+        """list_files() returns empty list for empty folder."""
+        service = self._make_service()
+        service.service.files().list().execute.return_value = {"files": []}
+
+        result = service.list_files("folder-123")
+
+        assert result == []

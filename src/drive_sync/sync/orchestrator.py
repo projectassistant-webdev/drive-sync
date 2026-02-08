@@ -216,6 +216,45 @@ class GoogleDriveSync(ProcessorMixin, UploaderMixin):
             logger.warning(f"Skipped: {file_path} - {e}")
             return None
 
+    def _attempt_cache_rebuild(self, directory: Path) -> None:
+        """Attempt to rebuild cache from Drive when cache is totally empty.
+
+        If the cache is completely empty (no main file, no backup), queries
+        the Google Drive folder to list existing files and rebuilds the cache
+        by matching filenames to local files.
+
+        Args:
+            directory: Local directory root for filename matching.
+        """
+        if not self.use_cache or self.cache is None:
+            return
+
+        if not self.cache.is_empty():
+            return
+
+        logger.info("Cache is empty — attempting rebuild from Drive listing")
+
+        try:
+            # Use existing gdrive_service or create one from auth
+            drive_service = self.gdrive_service
+            if drive_service is None:
+                logger.info("Creating temporary Drive service for cache rebuild")
+                drive_service = GoogleDriveService(self.auth)
+
+            folder_id = self.folder_id
+            if not folder_id:
+                logger.warning("No folder_id configured, cannot rebuild cache from Drive")
+                return
+
+            drive_files = drive_service.list_files(folder_id)
+            rebuilt_count = self.cache.rebuild_from_drive(drive_files, directory)
+            logger.info(f"Cache rebuild complete: {rebuilt_count} entries recovered from Drive")
+
+        except Exception as e:
+            logger.warning(
+                f"Cache rebuild from Drive failed: {e}. Starting with empty cache."
+            )
+
     def sync_directory(self, directory: Path, recursive: bool = True, exclude: list[str] | None = None) -> dict[str, str]:
         """Sync entire directory to Google Drive with Mermaid support.
 
@@ -230,6 +269,9 @@ class GoogleDriveSync(ProcessorMixin, UploaderMixin):
         directory = Path(directory)
         exclude = exclude or []
         synced_files = {}
+
+        # Attempt cache rebuild if cache is totally empty (AC-3.10)
+        self._attempt_cache_rebuild(directory)
 
         # Create folder structure
         logger.info("Creating folder structure...")

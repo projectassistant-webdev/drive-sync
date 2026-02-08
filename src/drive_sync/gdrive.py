@@ -243,6 +243,56 @@ class GoogleDriveService:
             logger.error(f"Failed to set permissions: {error}")
             raise GoogleDriveError(f"Failed to set permissions: {error}") from error
 
+    def list_files(self, folder_id: str) -> list[dict[str, str]]:
+        """List all non-folder files in a Google Drive folder.
+
+        Queries the Drive API with pagination support and filters out
+        folders, returning only regular files.
+
+        Args:
+            folder_id: Google Drive folder ID to list.
+
+        Returns:
+            List of dicts with 'id' and 'name' keys for each file.
+
+        Raises:
+            GoogleDriveError: If the API call fails.
+        """
+        try:
+            all_files: list[dict[str, str]] = []
+            page_token: str | None = None
+
+            while True:
+                params: dict = {
+                    'q': (
+                        f"'{folder_id}' in parents and trashed=false"
+                        " and mimeType != 'application/vnd.google-apps.folder'"
+                    ),
+                    'spaces': 'drive',
+                    'fields': 'nextPageToken, files(id, name, mimeType)',
+                    'supportsAllDrives': True,
+                    'includeItemsFromAllDrives': True,
+                }
+                if page_token:
+                    params['pageToken'] = page_token
+
+                response = self.service.files().list(**params).execute()
+
+                files = response.get('files', [])
+                for f in files:
+                    all_files.append({'id': f['id'], 'name': f['name']})
+
+                page_token = response.get('nextPageToken')
+                if not page_token:
+                    break
+
+            logger.info(f"Listed {len(all_files)} files in folder {folder_id}")
+            return all_files
+
+        except HttpError as error:
+            logger.error(f"Failed to list files in folder {folder_id}: {error}")
+            raise GoogleDriveError(f"Failed to list files in folder {folder_id}: {error}") from error
+
     def add_service_account_reader(
         self,
         file_id: str
